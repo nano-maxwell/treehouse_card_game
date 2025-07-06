@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'main.dart';
+import 'package:treehouse_card_game/cardgame.dart';
 
 class CardModel {
   final String name;
