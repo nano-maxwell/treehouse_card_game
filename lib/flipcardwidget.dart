@@ -2,7 +2,6 @@
 
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'main.dart';
 
 class FlipCardController {
   _FlipCardWidgetState? _state;
