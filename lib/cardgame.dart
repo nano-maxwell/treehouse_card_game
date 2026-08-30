@@ -1,7 +1,8 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
-import 'package:treehouse_card_game/flipcardwidget.dart';
+import 'package:flutter/services.dart';
 import 'package:treehouse_card_game/playingcard.dart';
-import 'package:flutter/scheduler.dart' show TickerCanceled;
 
 const Color darkerPurple = Color.fromARGB(255, 85, 105, 220);
 const Color bgPurple = Color.fromARGB(255, 144, 157, 255);
@@ -90,18 +91,24 @@ class CardGame extends StatefulWidget {
   State<CardGame> createState() => _CardGameState();
 }
 
-class _CardGameState extends State<CardGame> {
+class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
   List<CardModel> visibleCards = [];
   late List<CardModel> cardDeck;
 
   int? tappedIndex;
-  final FlipCardController controller = FlipCardController();
+  final _DeckCardController controller = _DeckCardController();
+  final GlobalKey _deckCardKey = GlobalKey();
+  final List<GlobalKey> _pileKeys = List.generate(9, (_) => GlobalKey());
 
   CardModel? nextCard;
   bool isAnimating = false;
   GameStatus gameStatus = GameStatus.playing;
 
   int roundId = 0;
+  late final AnimationController _feedbackController;
+  int? _wrongPileIndex;
+  bool _hideDeckFace = false;
+  final Set<int> _landingPileIndices = {};
 
   int get cardsRemaining {
     return cardDeck.length + (nextCard == null ? 0 : 1);
@@ -121,6 +128,16 @@ class _CardGameState extends State<CardGame> {
   @override
   void initState() {
     super.initState();
+
+    _feedbackController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
+    )..addListener(() {
+        if (mounted) {
+          setState(() {});
+        }
+      });
+
     _dealNewGame();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -128,6 +145,12 @@ class _CardGameState extends State<CardGame> {
         _precacheCardImages(context);
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _feedbackController.dispose();
+    super.dispose();
   }
 
   void _dealNewGame() {
@@ -142,6 +165,11 @@ class _CardGameState extends State<CardGame> {
     tappedIndex = null;
     isAnimating = false;
     gameStatus = GameStatus.playing;
+    _wrongPileIndex = null;
+    _hideDeckFace = false;
+    _landingPileIndices.clear();
+    _feedbackController.reset();
+    controller.reset();
     roundId++;
   }
 
@@ -167,45 +195,239 @@ class _CardGameState extends State<CardGame> {
     }
 
     final activeRoundId = roundId;
+    final selectedCard = visibleCards[selectedIndex];
+    final guessedCorrectly = checkingHigher
+        ? selectedCard.getValue() < revealedCard.getValue()
+        : selectedCard.getValue() > revealedCard.getValue();
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
 
     setState(() {
       isAnimating = true;
     });
 
-    await controller.flipCard();
+    if (!reduceMotion) {
+      await controller.reveal();
+      await Future<void>.delayed(const Duration(milliseconds: 240));
+    }
 
     if (!mounted || activeRoundId != roundId) {
       return;
     }
 
-    setState(() {
-      final selectedCard = visibleCards[selectedIndex];
-
-      final guessedCorrectly = checkingHigher
-          ? selectedCard.getValue() < revealedCard.getValue()
-          : selectedCard.getValue() > revealedCard.getValue();
-
-      visibleCards[selectedIndex] =
-          guessedCorrectly ? revealedCard : CardModel('playing-card');
-
-      tappedIndex = null;
-
-      final noPlayableCards = visibleCards.every(
-        (card) => card.name == 'playing-card',
-      );
-
-      if (noPlayableCards) {
-        gameStatus = GameStatus.lost;
-        nextCard = null;
-      } else if (cardDeck.isEmpty) {
-        gameStatus = GameStatus.won;
-        nextCard = null;
+    if (guessedCorrectly) {
+      if (reduceMotion) {
+        setState(() {
+          visibleCards[selectedIndex] = revealedCard;
+        });
       } else {
-        nextCard = cardDeck.removeAt(0);
+        setState(() {
+          _hideDeckFace = true;
+        });
+
+        await _animateCardToPile(
+          pileIndex: selectedIndex,
+          card: revealedCard,
+          activeRoundId: activeRoundId,
+          onArrive: () {
+            setState(() {
+              visibleCards[selectedIndex] = revealedCard;
+            });
+          },
+        );
       }
 
-      isAnimating = false;
+      if (!mounted || activeRoundId != roundId) {
+        return;
+      }
+
+      controller.reset();
+      HapticFeedback.lightImpact();
+
+      setState(() {
+        _hideDeckFace = false;
+        if (!reduceMotion) {
+          _landingPileIndices.add(selectedIndex);
+        }
+        _finishTurn();
+      });
+
+      if (!reduceMotion) {
+        _clearLandingAnimationAfterDelay(selectedIndex, activeRoundId);
+      }
+    } else {
+      if (!reduceMotion) {
+        await _animateIncorrectGuess(selectedIndex);
+      }
+
+      if (!mounted || activeRoundId != roundId) {
+        return;
+      }
+
+      controller.reset();
+      _feedbackController.reset();
+      HapticFeedback.mediumImpact();
+
+      setState(() {
+        _wrongPileIndex = null;
+        visibleCards[selectedIndex] = CardModel('playing-card');
+        _finishTurn();
+      });
+    }
+  }
+
+  void _finishTurn() {
+    tappedIndex = null;
+
+    final noPlayableCards = visibleCards.every(
+      (card) => card.name == 'playing-card',
+    );
+
+    if (noPlayableCards) {
+      gameStatus = GameStatus.lost;
+      nextCard = null;
+    } else if (cardDeck.isEmpty) {
+      gameStatus = GameStatus.won;
+      nextCard = null;
+    } else {
+      nextCard = cardDeck.removeAt(0);
+    }
+
+    isAnimating = false;
+  }
+
+  Future<void> _animateIncorrectGuess(int pileIndex) async {
+    setState(() {
+      _wrongPileIndex = pileIndex;
     });
+
+    try {
+      await _feedbackController.forward(from: 0).orCancel;
+    } on TickerCanceled {
+      // The game was disposed while feedback was playing.
+    }
+  }
+
+  void _clearLandingAnimationAfterDelay(int pileIndex, int activeRoundId) {
+    Future<void>.delayed(const Duration(milliseconds: 220)).then((_) {
+      if (!mounted || activeRoundId != roundId) {
+        return;
+      }
+
+      setState(() {
+        _landingPileIndices.remove(pileIndex);
+      });
+    });
+  }
+
+  Rect? _rectForKey(GlobalKey key, RenderBox overlayBox) {
+    final keyContext = key.currentContext;
+    if (keyContext == null) {
+      return null;
+    }
+
+    final renderObject = keyContext.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return null;
+    }
+
+    final topLeft = renderObject.localToGlobal(
+      Offset.zero,
+      ancestor: overlayBox,
+    );
+
+    return topLeft & renderObject.size;
+  }
+
+  Future<void> _animateCardToPile({
+    required int pileIndex,
+    required CardModel card,
+    required int activeRoundId,
+    required VoidCallback onArrive,
+  }) async {
+    final overlay = Overlay.of(context);
+    final overlayRenderObject = overlay.context.findRenderObject();
+
+    if (overlayRenderObject is! RenderBox) {
+      onArrive();
+      return;
+    }
+
+    final startRect = _rectForKey(_deckCardKey, overlayRenderObject);
+    final endRect = _rectForKey(_pileKeys[pileIndex], overlayRenderObject);
+
+    if (startRect == null || endRect == null) {
+      onArrive();
+      return;
+    }
+
+    final flightController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 520),
+    );
+    final flightAnimation = CurvedAnimation(
+      parent: flightController,
+      curve: Curves.easeInOutCubic,
+    );
+
+    late final OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (context) {
+        return AnimatedBuilder(
+          animation: flightAnimation,
+          builder: (context, child) {
+            final progress = flightAnimation.value;
+            final inverseProgress = 1 - progress;
+            final start = startRect.center;
+            final end = endRect.center;
+            final controlPoint = Offset(
+              (start.dx + end.dx) / 2,
+              math.min(start.dy, end.dy) - 70,
+            );
+
+            final position = start * (inverseProgress * inverseProgress) +
+                controlPoint * (2 * inverseProgress * progress) +
+                end * (progress * progress);
+            final size = Size.lerp(
+              startRect.size,
+              endRect.size,
+              progress,
+            )!;
+
+            return Positioned(
+              left: position.dx - size.width / 2,
+              top: position.dy - size.height / 2,
+              width: size.width,
+              height: size.height,
+              child: IgnorePointer(
+                child: Transform.rotate(
+                  angle: 0.05 * math.sin(math.pi * progress),
+                  child: Image.asset(
+                    'assets/${card.name}.png',
+                    fit: BoxFit.contain,
+                    gaplessPlayback: true,
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    overlay.insert(entry);
+
+    try {
+      await flightController.forward().orCancel;
+
+      if (mounted && activeRoundId == roundId) {
+        onArrive();
+      }
+    } on TickerCanceled {
+      // The game was disposed while the card was moving.
+    } finally {
+      entry.remove();
+      flightController.dispose();
+    }
   }
 
   void _showResetConfirmationDialog(BuildContext context) {
@@ -286,20 +508,72 @@ class _CardGameState extends State<CardGame> {
 
   Widget _buildCard(int index, double cardSize) {
     final card = visibleCards[index];
+    final feedbackProgress =
+        _wrongPileIndex == index ? _feedbackController.value : 0.0;
+    final shakeOffset =
+        math.sin(feedbackProgress * math.pi * 8) * (1 - feedbackProgress) * 10;
+    final feedbackScale = 1 - (feedbackProgress * 0.14);
+    final feedbackOpacity = 1 - feedbackProgress;
+    final isSelected = tappedIndex == index;
+    final isLanding = _landingPileIndices.contains(index);
+    final showSelectionGlow = isSelected && !isAnimating;
 
     return SizedBox(
+      key: _pileKeys[index],
       height: cardSize,
       width: cardSize,
-      child: PlayingCard(
-        cardName: card.name,
-        isSelected: tappedIndex == index,
-        isDimmed: tappedIndex == null || tappedIndex == index,
-        onTap: () {
-          if (gameStatus == GameStatus.playing &&
-              card.name != 'playing-card') {
-            _handleCardTap(index);
-          }
-        },
+      child: Transform.translate(
+        offset: Offset(shakeOffset, 0),
+        child: Transform.scale(
+          scale: feedbackScale,
+          child: Opacity(
+            opacity: feedbackOpacity,
+            child: AnimatedContainer(
+              duration: _wrongPileIndex == index
+                  ? Duration.zero
+                  : const Duration(milliseconds: 160),
+              curve: Curves.easeOutCubic,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: showSelectionGlow
+                    ? const [
+                        BoxShadow(
+                          color: Color.fromARGB(110, 255, 255, 255),
+                          blurRadius: 16,
+                          spreadRadius: 2,
+                        ),
+                      ]
+                    : const [],
+              ),
+              child: TweenAnimationBuilder<double>(
+                key: ValueKey('${card.name}-$isLanding'),
+                tween: Tween<double>(
+                  begin: isLanding ? 0.88 : 1,
+                  end: 1,
+                ),
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutBack,
+                builder: (context, scale, child) {
+                  return Transform.scale(
+                    scale: scale,
+                    child: child,
+                  );
+                },
+                child: PlayingCard(
+                  cardName: card.name,
+                  isSelected: isSelected,
+                  isDimmed: tappedIndex == null || isSelected,
+                  onTap: () {
+                    if (gameStatus == GameStatus.playing &&
+                        card.name != 'playing-card') {
+                      _handleCardTap(index);
+                    }
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -330,6 +604,10 @@ class _CardGameState extends State<CardGame> {
   }
 
   Widget _buildDeck() {
+    final deckCardOpacity = _wrongPileIndex != null
+        ? 1 - _feedbackController.value
+        : (_hideDeckFace ? 0.0 : 1.0);
+
     return Stack(
       alignment: const Alignment(0, -1),
       children: [
@@ -338,15 +616,16 @@ class _CardGameState extends State<CardGame> {
           height: 125,
         ),
         if (nextCard != null)
-          FlipCardWidget(
-            front: Image.asset(
-              'assets/${nextCard!.name}.png',
-              height: 110,
-            ),
-            controller: controller,
-            back: Image.asset(
-              'assets/playing-card.png',
-              height: 110,
+          SizedBox(
+            key: _deckCardKey,
+            height: 110,
+            width: 110,
+            child: Opacity(
+              opacity: deckCardOpacity,
+              child: _DeckCardWidget(
+                card: nextCard,
+                controller: controller,
+              ),
             ),
           )
         else
@@ -360,10 +639,9 @@ class _CardGameState extends State<CardGame> {
 
   @override
   Widget build(BuildContext context) {
-    final selectedCard =
-        gameStatus == GameStatus.playing && tappedIndex != null
-            ? visibleCards[tappedIndex!]
-            : null;
+    final selectedCard = gameStatus == GameStatus.playing && tappedIndex != null
+        ? visibleCards[tappedIndex!]
+        : null;
 
     return Scaffold(
       backgroundColor: bgPurple,
@@ -458,14 +736,29 @@ class _CardGameState extends State<CardGame> {
                     const SizedBox(height: 35),
                     _buildDeck(),
                     const SizedBox(height: 30),
-                    Text(
-                      gameStatusText,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.25,
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      transitionBuilder: (child, animation) {
+                        return FadeTransition(
+                          opacity: animation,
+                          child: ScaleTransition(
+                            scale: Tween<double>(begin: 0.96, end: 1).animate(
+                              animation,
+                            ),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: Text(
+                        gameStatusText,
+                        key: ValueKey(gameStatusText),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.25,
+                        ),
                       ),
                     ),
                   ],
@@ -475,6 +768,131 @@ class _CardGameState extends State<CardGame> {
           },
         ),
       ),
+    );
+  }
+}
+
+class _DeckCardController {
+  _DeckCardWidgetState? _state;
+
+  Future<void> reveal() {
+    return _state?.reveal() ?? Future<void>.value();
+  }
+
+  void reset() {
+    _state?.reset();
+  }
+}
+
+class _DeckCardWidget extends StatefulWidget {
+  final CardModel? card;
+  final _DeckCardController controller;
+
+  const _DeckCardWidget({
+    required this.card,
+    required this.controller,
+  });
+
+  @override
+  State<_DeckCardWidget> createState() => _DeckCardWidgetState();
+}
+
+class _DeckCardWidgetState extends State<_DeckCardWidget>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+    );
+    _animation = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeInOutCubic,
+    );
+
+    widget.controller._state = this;
+  }
+
+  @override
+  void didUpdateWidget(covariant _DeckCardWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.controller != widget.controller) {
+      if (oldWidget.controller._state == this) {
+        oldWidget.controller._state = null;
+      }
+      widget.controller._state = this;
+    }
+  }
+
+  Future<void> reveal() async {
+    if (_controller.isAnimating) {
+      return;
+    }
+
+    try {
+      await _controller.forward(from: 0).orCancel;
+    } on TickerCanceled {
+      // The card was disposed while revealing.
+    }
+  }
+
+  void reset() {
+    if (mounted) {
+      _controller.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    if (widget.controller._state == this) {
+      widget.controller._state = null;
+    }
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        final angle = _animation.value * math.pi;
+        final showBack = angle < math.pi / 2;
+        final transform = Matrix4.identity()
+          ..setEntry(3, 2, 0.0025)
+          ..rotateY(angle);
+
+        final face = Image.asset(
+          widget.card == null
+              ? 'assets/playing-card.png'
+              : 'assets/${widget.card!.name}.png',
+          height: 110,
+          fit: BoxFit.contain,
+          gaplessPlayback: true,
+        );
+
+        return Transform(
+          transform: transform,
+          alignment: Alignment.center,
+          child: showBack
+              ? Image.asset(
+                  'assets/playing-card.png',
+                  height: 110,
+                  fit: BoxFit.contain,
+                )
+              : Transform(
+                  transform: Matrix4.identity()..rotateY(math.pi),
+                  alignment: Alignment.center,
+                  child: face,
+                ),
+        );
+      },
     );
   }
 }
@@ -491,8 +909,7 @@ class HigherButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDisabled =
-        selectedCard == null || selectedCard!.getValue() == 13;
+    final isDisabled = selectedCard == null || selectedCard!.getValue() == 13;
 
     return GestureDetector(
       onTap: isDisabled ? null : onPressed,
@@ -536,8 +953,7 @@ class LowerButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDisabled =
-        selectedCard == null || selectedCard!.getValue() == 1;
+    final isDisabled = selectedCard == null || selectedCard!.getValue() == 1;
 
     return GestureDetector(
       onTap: isDisabled ? null : onPressed,
