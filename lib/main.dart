@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:treehouse_card_game/cardgame.dart';
+import 'package:treehouse_card_game/homepage.dart';
 
 void main() {
   runApp(const MyApp());
@@ -11,9 +11,9 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const MaterialApp(
+      title: 'Treehouse Card Game',
       debugShowCheckedModeBanner: false,
-      home: CardGame(),
+      home: HomePage(),
     );
   }
 }
-

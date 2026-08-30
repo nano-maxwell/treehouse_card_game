@@ -1,11 +1,11 @@
 {
-    "name": "treehouse_card_game",
-    "short_name": "treehouse_card_game",
+    "name": "Treehouse Card Game",
+    "short_name": "Treehouse",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "A higher-or-lower card game with nine playable piles.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

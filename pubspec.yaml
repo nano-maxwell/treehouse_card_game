@@ -1,5 +1,5 @@
 name: treehouse_card_game
-description: "A new Flutter project."
+description: "A higher-or-lower card game with nine playable piles."
 publish_to: 'none'
 version: 0.1.0
 

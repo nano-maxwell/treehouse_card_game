@@ -366,7 +366,7 @@
 				DEVELOPMENT_TEAM = J2N3L4W98J;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Treehouse;
+				INFOPLIST_KEY_CFBundleDisplayName = "Treehouse Card Game";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.card-games";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -550,7 +550,7 @@
 				DEVELOPMENT_TEAM = J2N3L4W98J;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Treehouse;
+				INFOPLIST_KEY_CFBundleDisplayName = "Treehouse Card Game";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.card-games";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -575,7 +575,7 @@
 				DEVELOPMENT_TEAM = J2N3L4W98J;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Treehouse;
+				INFOPLIST_KEY_CFBundleDisplayName = "Treehouse Card Game";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.card-games";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

@@ -114,6 +114,11 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
     return cardDeck.length + (nextCard == null ? 0 : 1);
   }
 
+  double get gameProgress {
+    final drawableCards = fullDeck.length - visibleCards.length;
+    return ((drawableCards - cardsRemaining) / drawableCards).clamp(0.0, 1.0);
+  }
+
   String get gameStatusText {
     switch (gameStatus) {
       case GameStatus.playing:
@@ -123,6 +128,22 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
       case GameStatus.lost:
         return 'Game over!';
     }
+  }
+
+  String get instructionText {
+    if (gameStatus == GameStatus.won) {
+      return 'You made it through the deck.';
+    }
+    if (gameStatus == GameStatus.lost) {
+      return 'All nine piles have been cleared.';
+    }
+    if (isAnimating) {
+      return 'Revealing the next card...';
+    }
+    if (tappedIndex == null) {
+      return 'Choose a card pile.';
+    }
+    return 'Will the next card be higher or lower?';
   }
 
   @override
@@ -254,6 +275,7 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
       if (!reduceMotion) {
         _clearLandingAnimationAfterDelay(selectedIndex, activeRoundId);
       }
+      _queueResultDialog(activeRoundId);
     } else {
       if (!reduceMotion) {
         await _animateIncorrectGuess(selectedIndex);
@@ -272,6 +294,7 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
         visibleCards[selectedIndex] = CardModel('playing-card');
         _finishTurn();
       });
+      _queueResultDialog(activeRoundId);
     }
   }
 
@@ -334,8 +357,12 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
       Offset.zero,
       ancestor: overlayBox,
     );
+    final bottomRight = renderObject.localToGlobal(
+      renderObject.size.bottomRight(Offset.zero),
+      ancestor: overlayBox,
+    );
 
-    return topLeft & renderObject.size;
+    return Rect.fromPoints(topLeft, bottomRight);
   }
 
   Future<void> _animateCardToPile({
@@ -430,6 +457,73 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
     }
   }
 
+  Future<void> _showLeaveConfirmationDialog() async {
+    final shouldLeave = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: const Color.fromARGB(255, 225, 225, 225),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: const Text(
+          'Are you sure you want to leave the game?',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Colors.black,
+          ),
+        ),
+        content: const Text(
+          'Your progress from this game will not be saved.',
+          style: TextStyle(
+            fontSize: 16,
+            color: Colors.black,
+          ),
+        ),
+        actionsPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
+        actions: [
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: darkerPurple,
+            ),
+            onPressed: () {
+              Navigator.of(dialogContext).pop(false);
+            },
+            child: const Text(
+              'Cancel',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: darkerPurple,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onPressed: () {
+              Navigator.of(dialogContext).pop(true);
+            },
+            child: const Text(
+              'Confirm',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted || shouldLeave != true) {
+      return;
+    }
+
+    Navigator.of(context).maybePop();
+  }
+
   void _showResetConfirmationDialog(BuildContext context) {
     showDialog<void>(
       context: context,
@@ -492,6 +586,148 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
     );
   }
 
+  void _showHowToPlayDialog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: const Color.fromARGB(255, 245, 245, 250),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.help_outline_rounded, color: darkerPurple),
+            SizedBox(width: 10),
+            Text(
+              'How to play',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: const Text(
+          '1. Choose one of the nine card piles.\n\n'
+          '2. Guess whether the next card will be higher or lower.\n\n'
+          '3. A correct card replaces the selected card. An incorrect guess '
+          'clears that pile.\n\n'
+          'Aces are low, kings are high, and matching values count as an '
+          'incorrect guess. Clear the deck before losing all nine piles to win.',
+          style: TextStyle(
+            color: Colors.black87,
+            fontSize: 16,
+            height: 1.3,
+          ),
+        ),
+        actions: [
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: darkerPurple,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+            },
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _queueResultDialog(int activeRoundId) {
+    if (gameStatus == GameStatus.playing) {
+      return;
+    }
+
+    final result = gameStatus;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || roundId != activeRoundId || gameStatus != result) {
+        return;
+      }
+
+      _showResultDialog(result);
+    });
+  }
+
+  void _showResultDialog(GameStatus result) {
+    final won = result == GameStatus.won;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          backgroundColor: const Color.fromARGB(255, 245, 245, 250),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          icon: Icon(
+            won ? Icons.emoji_events_rounded : Icons.refresh_rounded,
+            color: darkerPurple,
+            size: 48,
+          ),
+          title: Text(
+            won ? 'You won!' : 'Game over',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            won
+                ? 'You successfully made it through the entire deck.'
+                : 'All nine piles were cleared before the deck ran out.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.black87,
+              fontSize: 16,
+              height: 1.3,
+            ),
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            TextButton.icon(
+              style: TextButton.styleFrom(
+                foregroundColor: darkerPurple,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 12,
+                ),
+              ),
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+
+                await Future<void>.delayed(Duration.zero);
+                if (!mounted) {
+                  return;
+                }
+
+                Navigator.of(context).maybePop();
+              },
+              icon: const Icon(Icons.home_rounded),
+              label: const Text('Home'),
+            ),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: darkerPurple,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 22,
+                  vertical: 12,
+                ),
+              ),
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                setState(_dealNewGame);
+              },
+              icon: const Icon(Icons.replay_rounded),
+              label: const Text('Play again'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _precacheCardImages(BuildContext context) {
     for (final cardName in fullDeck) {
       precacheImage(
@@ -516,7 +752,6 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
     final feedbackOpacity = 1 - feedbackProgress;
     final isSelected = tappedIndex == index;
     final isLanding = _landingPileIndices.contains(index);
-    final showSelectionGlow = isSelected && !isAnimating;
 
     return SizedBox(
       key: _pileKeys[index],
@@ -528,48 +763,30 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
           scale: feedbackScale,
           child: Opacity(
             opacity: feedbackOpacity,
-            child: AnimatedContainer(
-              duration: _wrongPileIndex == index
-                  ? Duration.zero
-                  : const Duration(milliseconds: 160),
-              curve: Curves.easeOutCubic,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: showSelectionGlow
-                    ? const [
-                        BoxShadow(
-                          color: Color.fromARGB(110, 255, 255, 255),
-                          blurRadius: 16,
-                          spreadRadius: 2,
-                        ),
-                      ]
-                    : const [],
+            child: TweenAnimationBuilder<double>(
+              key: ValueKey('${card.name}-$isLanding'),
+              tween: Tween<double>(
+                begin: isLanding ? 0.88 : 1,
+                end: 1,
               ),
-              child: TweenAnimationBuilder<double>(
-                key: ValueKey('${card.name}-$isLanding'),
-                tween: Tween<double>(
-                  begin: isLanding ? 0.88 : 1,
-                  end: 1,
-                ),
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOutBack,
-                builder: (context, scale, child) {
-                  return Transform.scale(
-                    scale: scale,
-                    child: child,
-                  );
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutBack,
+              builder: (context, scale, child) {
+                return Transform.scale(
+                  scale: scale,
+                  child: child,
+                );
+              },
+              child: PlayingCard(
+                cardName: card.name,
+                isSelected: isSelected,
+                isDimmed: tappedIndex == null || isSelected,
+                onTap: () {
+                  if (gameStatus == GameStatus.playing &&
+                      card.name != 'playing-card') {
+                    _handleCardTap(index);
+                  }
                 },
-                child: PlayingCard(
-                  cardName: card.name,
-                  isSelected: isSelected,
-                  isDimmed: tappedIndex == null || isSelected,
-                  onTap: () {
-                    if (gameStatus == GameStatus.playing &&
-                        card.name != 'playing-card') {
-                      _handleCardTap(index);
-                    }
-                  },
-                ),
               ),
             ),
           ),
@@ -595,9 +812,9 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
     return Column(
       children: [
         buildRow(0),
-        const SizedBox(height: 30),
+        const SizedBox(height: 14),
         buildRow(3),
-        const SizedBox(height: 30),
+        const SizedBox(height: 14),
         buildRow(6),
       ],
     );
@@ -646,75 +863,98 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
     return Scaffold(
       backgroundColor: bgPurple,
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            const horizontalPadding = 16.0;
-            const totalCardSpacing = 10.0;
-
-            final cardSize = ((constraints.maxWidth -
-                        horizontalPadding * 2 -
-                        totalCardSpacing) /
-                    3)
-                .clamp(0.0, 110.0)
-                .toDouble();
-
-            final minimumHeight = (constraints.maxHeight - 32)
-                .clamp(0.0, double.infinity)
-                .toDouble();
-
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(horizontalPadding),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: minimumHeight,
-                ),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: SizedBox(
+                width: 360,
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Padding(
-                      padding: const EdgeInsets.only(
-                        left: 24,
-                        right: 24,
-                        bottom: 5,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          GestureDetector(
-                            onTap: isAnimating
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: 'Home',
+                                onPressed: isAnimating
+                                    ? null
+                                    : () {
+                                        _showLeaveConfirmationDialog();
+                                      },
+                                icon: const Icon(
+                                  Icons.home_rounded,
+                                  size: 30,
+                                ),
+                                color: Colors.white,
+                                disabledColor: Colors.white38,
+                              ),
+                              IconButton(
+                                tooltip: 'Start over',
+                                onPressed: isAnimating
+                                    ? null
+                                    : () {
+                                        _showResetConfirmationDialog(context);
+                                      },
+                                icon: const Icon(
+                                  Icons.refresh_rounded,
+                                  size: 30,
+                                ),
+                                color: Colors.white,
+                                disabledColor: Colors.white38,
+                              ),
+                            ],
+                          ),
+                          IconButton(
+                            tooltip: 'How to play',
+                            onPressed: isAnimating
                                 ? null
                                 : () {
-                                    _showResetConfirmationDialog(context);
+                                    _showHowToPlayDialog(context);
                                   },
-                            child: AnimatedOpacity(
-                              opacity: isAnimating ? 0.4 : 1,
-                              duration: const Duration(milliseconds: 100),
-                              child: const Padding(
-                                padding: EdgeInsets.only(bottom: 14),
-                                child: Icon(
-                                  Icons.refresh_rounded,
-                                  size: 35,
-                                  color: Colors.white,
-                                ),
-                              ),
+                            icon: const Icon(
+                              Icons.help_outline_rounded,
+                              size: 32,
                             ),
-                          ),
-                          GestureDetector(
-                            onTap: () {},
-                            child: const Padding(
-                              padding: EdgeInsets.only(bottom: 14),
-                              child: Icon(
-                                Icons.help_outline_rounded,
-                                size: 35,
-                                color: Colors.white,
-                              ),
-                            ),
+                            color: Colors.white,
+                            disabledColor: Colors.white38,
                           ),
                         ],
                       ),
                     ),
-                    _buildCardGrid(cardSize),
-                    const SizedBox(height: 35),
+                    const Text(
+                      'Treehouse Card Game',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 27,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 160),
+                      child: Text(
+                        instructionText,
+                        key: ValueKey(instructionText),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildCardGrid(110),
+                    const SizedBox(height: 20),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -733,9 +973,9 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 35),
+                    const SizedBox(height: 20),
                     _buildDeck(),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 14),
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 180),
                       transitionBuilder: (child, animation) {
@@ -761,11 +1001,37 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    Semantics(
+                      label: '${(gameProgress * 100).round()} percent complete',
+                      value: '$cardsRemaining cards remaining',
+                      child: SizedBox(
+                        width: 270,
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween<double>(end: gameProgress),
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, value, child) {
+                            return ClipRRect(
+                              borderRadius: BorderRadius.circular(20),
+                              child: LinearProgressIndicator(
+                                value: value,
+                                minHeight: 8,
+                                backgroundColor: Colors.white24,
+                                valueColor: const AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
-            );
-          },
+            ),
+          ),
         ),
       ),
     );
@@ -911,29 +1177,26 @@ class HigherButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDisabled = selectedCard == null || selectedCard!.getValue() == 13;
 
-    return GestureDetector(
-      onTap: isDisabled ? null : onPressed,
-      child: AnimatedOpacity(
-        opacity: isDisabled ? 0.4 : 1,
-        duration: const Duration(milliseconds: 100),
-        child: Container(
-          height: 56,
-          width: 130,
-          decoration: const BoxDecoration(
-            color: darkerPurple,
-            borderRadius: BorderRadius.all(
-              Radius.circular(15),
-            ),
+    return SizedBox(
+      height: 56,
+      width: 130,
+      child: ElevatedButton(
+        onPressed: isDisabled ? null : onPressed,
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          backgroundColor: darkerPurple,
+          disabledBackgroundColor: const Color.fromARGB(102, 85, 105, 220),
+          foregroundColor: Colors.white,
+          disabledForegroundColor: Colors.white54,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
           ),
-          child: const Center(
-            child: Text(
-              'Higher',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
+        ),
+        child: const Text(
+          'Higher',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
           ),
         ),
       ),
@@ -955,29 +1218,26 @@ class LowerButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDisabled = selectedCard == null || selectedCard!.getValue() == 1;
 
-    return GestureDetector(
-      onTap: isDisabled ? null : onPressed,
-      child: AnimatedOpacity(
-        opacity: isDisabled ? 0.4 : 1,
-        duration: const Duration(milliseconds: 100),
-        child: Container(
-          height: 56,
-          width: 130,
-          decoration: const BoxDecoration(
-            color: darkerPurple,
-            borderRadius: BorderRadius.all(
-              Radius.circular(15),
-            ),
+    return SizedBox(
+      height: 56,
+      width: 130,
+      child: ElevatedButton(
+        onPressed: isDisabled ? null : onPressed,
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          backgroundColor: darkerPurple,
+          disabledBackgroundColor: const Color.fromARGB(102, 85, 105, 220),
+          foregroundColor: Colors.white,
+          disabledForegroundColor: Colors.white54,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
           ),
-          child: const Center(
-            child: Text(
-              'Lower',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
+        ),
+        child: const Text(
+          'Lower',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
           ),
         ),
       ),

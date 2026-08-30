@@ -1,3 +1,3 @@
-# treehouse_card_game
+# Treehouse Card Game
 
-A new Flutter project.
+A higher-or-lower card game built with Flutter.
