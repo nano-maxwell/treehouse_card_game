@@ -1,0 +1,61 @@
+{
+  "fill" : {
+    "automatic-gradient" : "display-p3:0.56471,0.61569,1.00000,1.00000",
+    "orientation" : {
+      "start" : {
+        "x" : 0.5,
+        "y" : 0
+      },
+      "stop" : {
+        "x" : 0.5,
+        "y" : 0.7
+      }
+    }
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "fill" : "automatic",
+          "glass" : true,
+          "hidden" : false,
+          "image-name" : "ace-of-spades.png",
+          "name" : "ace-of-spades",
+          "position" : {
+            "scale" : 1.25,
+            "translation-in-points" : [
+              -50,
+              0
+            ]
+          }
+        },
+        {
+          "image-name" : "playing-card.png",
+          "name" : "playing-card",
+          "position" : {
+            "scale" : 1.25,
+            "translation-in-points" : [
+              50,
+              0
+            ]
+          }
+        }
+      ],
+      "name" : "Playing Cards",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}
