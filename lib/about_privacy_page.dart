@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:treehouse_card_game/cardgame.dart';
+
+const String _supportEmail = 'treehousecardgame@gmail.com';
 
 class AboutPrivacyPage extends StatelessWidget {
   const AboutPrivacyPage({super.key});
@@ -21,14 +24,14 @@ class AboutPrivacyPage extends StatelessWidget {
         top: false,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-          children: const [
-            Icon(
+          children: [
+            const Icon(
               Icons.style_rounded,
               color: Colors.white,
               size: 56,
             ),
-            SizedBox(height: 12),
-            Text(
+            const SizedBox(height: 12),
+            const Text(
               'Treehouse Card Game',
               textAlign: TextAlign.center,
               style: TextStyle(
@@ -38,8 +41,8 @@ class AboutPrivacyPage extends StatelessWidget {
                 letterSpacing: -0.5,
               ),
             ),
-            SizedBox(height: 4),
-            Text(
+            const SizedBox(height: 4),
+            const Text(
               'Version 1.0.0',
               textAlign: TextAlign.center,
               style: TextStyle(
@@ -48,8 +51,8 @@ class AboutPrivacyPage extends StatelessWidget {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            SizedBox(height: 28),
-            _InfoCard(
+            const SizedBox(height: 28),
+            const _InfoCard(
               title: 'Your privacy',
               icon: Icons.privacy_tip_outlined,
               child: Text(
@@ -58,8 +61,8 @@ class AboutPrivacyPage extends StatelessWidget {
                 'analytics, tracking, in-app purchases, or online features.',
               ),
             ),
-            SizedBox(height: 14),
-            _InfoCard(
+            const SizedBox(height: 14),
+            const _InfoCard(
               title: 'How the game works',
               icon: Icons.cloud_off_outlined,
               child: Text(
@@ -68,8 +71,8 @@ class AboutPrivacyPage extends StatelessWidget {
                 'the app.',
               ),
             ),
-            SizedBox(height: 14),
-            _InfoCard(
+            const SizedBox(height: 14),
+            const _InfoCard(
               title: 'Privacy-policy updates',
               icon: Icons.update_outlined,
               child: Text(
@@ -78,13 +81,49 @@ class AboutPrivacyPage extends StatelessWidget {
                 'takes effect.',
               ),
             ),
-            SizedBox(height: 14),
+            const SizedBox(height: 14),
             _InfoCard(
               title: 'Support',
               icon: Icons.support_agent_outlined,
-              child: Text(
-                'A public support contact and privacy-policy website will be '
-                'added before the App Store release.',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'For help or feedback, contact us at:',
+                  ),
+                  const SizedBox(height: 6),
+                  const SelectableText(
+                    _supportEmail,
+                    style: TextStyle(
+                      color: darkerPurple,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      foregroundColor: darkerPurple,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
+                    ),
+                    onPressed: () async {
+                      await Clipboard.setData(
+                        const ClipboardData(text: _supportEmail),
+                      );
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Support email copied'),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.copy_rounded, size: 18),
+                    label: const Text('Copy email'),
+                  ),
+                ],
               ),
             ),
           ],
