@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:treehouse_card_game/about_privacy_page.dart';
 import 'package:treehouse_card_game/cardgame.dart';
 
 class HomePage extends StatelessWidget {
@@ -30,6 +31,14 @@ class HomePage extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+
+  void _openAboutPrivacy(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const AboutPrivacyPage(),
       ),
     );
   }
@@ -109,6 +118,22 @@ class HomePage extends StatelessWidget {
                         color: Colors.white70,
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                      ),
+                      onPressed: () => _openAboutPrivacy(context),
+                      icon: const Icon(Icons.info_outline_rounded),
+                      label: const Text(
+                        'About & Privacy',
+                        style: TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ),
                   ],
