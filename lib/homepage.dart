@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:treehouse_card_game/about_privacy_page.dart';
 import 'package:treehouse_card_game/cardgame.dart';
+import 'package:treehouse_card_game/playingcard.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -80,11 +81,7 @@ class HomePage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 30),
-                    Image.asset(
-                      'assets/card-deck.png',
-                      height: 230,
-                      fit: BoxFit.contain,
-                    ),
+                    const CardDeckArtwork(height: 230),
                     const SizedBox(height: 32),
                     SizedBox(
                       width: 250,

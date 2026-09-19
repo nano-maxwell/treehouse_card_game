@@ -8,7 +8,7 @@
       },
       "stop" : {
         "x" : 0.5,
-        "y" : 0.7
+        "y" : 0.8
       }
     }
   },
@@ -16,39 +16,65 @@
     {
       "layers" : [
         {
-          "fill" : "automatic",
-          "glass" : true,
           "hidden" : false,
-          "image-name" : "ace-of-spades.png",
-          "name" : "ace-of-spades",
+          "image-name" : "pattern.svg",
+          "name" : "Card Back Pattern",
           "position" : {
-            "scale" : 1.25,
+            "scale" : 1,
             "translation-in-points" : [
-              -50,
-              0
-            ]
-          }
-        },
-        {
-          "image-name" : "playing-card.png",
-          "name" : "playing-card",
-          "position" : {
-            "scale" : 1.25,
-            "translation-in-points" : [
-              50,
-              0
+              0,
+              12
             ]
           }
         }
       ],
-      "name" : "Playing Cards",
+      "name" : "Pattern",
       "shadow" : {
         "kind" : "neutral",
-        "opacity" : 0.5
-      },
-      "translucency" : {
-        "enabled" : true,
-        "value" : 0.5
+        "opacity" : 0.18
+      }
+    },
+    {
+      "layers" : [
+        {
+          "glass" : true,
+          "hidden" : false,
+          "image-name" : "card.svg",
+          "name" : "Top Card",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              12
+            ]
+          }
+        }
+      ],
+      "name" : "Card",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.42
+      }
+    },
+    {
+      "layers" : [
+        {
+          "hidden" : false,
+          "image-name" : "deck.svg",
+          "name" : "Deck Layers",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              12
+            ]
+          }
+        }
+      ],
+      "name" : "Deck",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.32
       }
     }
   ],

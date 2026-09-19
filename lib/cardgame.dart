@@ -184,12 +184,6 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
       });
 
     _dealNewGame();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _precacheCardImages(context);
-      }
-    });
   }
 
   @override
@@ -451,11 +445,7 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
               child: IgnorePointer(
                 child: Transform.rotate(
                   angle: 0.05 * math.sin(math.pi * progress),
-                  child: Image.asset(
-                    'assets/${card.name}.png',
-                    fit: BoxFit.contain,
-                    gaplessPlayback: true,
-                  ),
+                  child: CardArtwork(cardName: card.name),
                 ),
               ),
             );
@@ -751,20 +741,6 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
     );
   }
 
-  void _precacheCardImages(BuildContext context) {
-    for (final cardName in fullDeck) {
-      precacheImage(
-        AssetImage('assets/$cardName.png'),
-        context,
-      );
-    }
-
-    precacheImage(
-      const AssetImage('assets/playing-card.png'),
-      context,
-    );
-  }
-
   Widget _buildCard(int index, double cardSize) {
     final card = visibleCards[index];
     final feedbackProgress =
@@ -851,10 +827,7 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
     return Stack(
       alignment: const Alignment(0, -1),
       children: [
-        Image.asset(
-          'assets/card-deck.png',
-          height: 125,
-        ),
+        const CardDeckArtwork(height: 125),
         if (nextCard != null)
           SizedBox(
             key: _deckCardKey,
@@ -1157,24 +1130,16 @@ class _DeckCardWidgetState extends State<_DeckCardWidget>
           ..setEntry(3, 2, 0.0025)
           ..rotateY(angle);
 
-        final face = Image.asset(
-          widget.card == null
-              ? 'assets/playing-card.png'
-              : 'assets/${widget.card!.name}.png',
+        final face = CardArtwork(
+          cardName: widget.card?.name ?? 'playing-card',
           height: 110,
-          fit: BoxFit.contain,
-          gaplessPlayback: true,
         );
 
         return Transform(
           transform: transform,
           alignment: Alignment.center,
           child: showBack
-              ? Image.asset(
-                  'assets/playing-card.png',
-                  height: 110,
-                  fit: BoxFit.contain,
-                )
+              ? const CardArtwork(cardName: 'playing-card', height: 110)
               : Transform(
                   transform: Matrix4.identity()..rotateY(math.pi),
                   alignment: Alignment.center,
