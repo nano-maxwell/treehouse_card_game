@@ -84,6 +84,30 @@ enum GameStatus {
   lost,
 }
 
+List<CardModel> shuffledDeck({math.Random? random}) {
+  return fullDeck.map(CardModel.new).toList()..shuffle(random);
+}
+
+bool isCorrectGuess({
+  required CardModel selectedCard,
+  required CardModel revealedCard,
+  required bool checkingHigher,
+}) {
+  return checkingHigher
+      ? selectedCard.getValue() < revealedCard.getValue()
+      : selectedCard.getValue() > revealedCard.getValue();
+}
+
+GameStatus gameStatusForTurn({
+  required Iterable<CardModel> visibleCards,
+  required bool deckIsEmpty,
+}) {
+  if (visibleCards.every((card) => card.name == 'playing-card')) {
+    return GameStatus.lost;
+  }
+  return deckIsEmpty ? GameStatus.won : GameStatus.playing;
+}
+
 class CardGame extends StatefulWidget {
   const CardGame({super.key});
 
@@ -175,7 +199,7 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
   }
 
   void _dealNewGame() {
-    cardDeck = fullDeck.map((name) => CardModel(name)).toList()..shuffle();
+    cardDeck = shuffledDeck();
 
     visibleCards = List.generate(
       9,
@@ -217,9 +241,11 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
 
     final activeRoundId = roundId;
     final selectedCard = visibleCards[selectedIndex];
-    final guessedCorrectly = checkingHigher
-        ? selectedCard.getValue() < revealedCard.getValue()
-        : selectedCard.getValue() > revealedCard.getValue();
+    final guessedCorrectly = isCorrectGuess(
+      selectedCard: selectedCard,
+      revealedCard: revealedCard,
+      checkingHigher: checkingHigher,
+    );
     final reduceMotion = MediaQuery.of(context).disableAnimations;
 
     setState(() {
@@ -301,18 +327,15 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
   void _finishTurn() {
     tappedIndex = null;
 
-    final noPlayableCards = visibleCards.every(
-      (card) => card.name == 'playing-card',
+    gameStatus = gameStatusForTurn(
+      visibleCards: visibleCards,
+      deckIsEmpty: cardDeck.isEmpty,
     );
 
-    if (noPlayableCards) {
-      gameStatus = GameStatus.lost;
-      nextCard = null;
-    } else if (cardDeck.isEmpty) {
-      gameStatus = GameStatus.won;
-      nextCard = null;
-    } else {
+    if (gameStatus == GameStatus.playing) {
       nextCard = cardDeck.removeAt(0);
+    } else {
+      nextCard = null;
     }
 
     isAnimating = false;
