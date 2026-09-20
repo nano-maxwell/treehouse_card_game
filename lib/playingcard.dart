@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:treehouse_card_game/cardgame.dart';
 
+const double playingCardAspectRatio = 0.72;
+
 class CardModel {
   final String name;
 
@@ -82,7 +84,7 @@ class CardArtwork extends StatelessWidget {
       width: width,
       child: Center(
         child: AspectRatio(
-          aspectRatio: 0.72,
+          aspectRatio: playingCardAspectRatio,
           child: cardName == 'playing-card'
               ? const _CardBack()
               : _CardFace(cardName: cardName),

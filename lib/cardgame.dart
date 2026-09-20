@@ -6,6 +6,7 @@ import 'package:treehouse_card_game/playingcard.dart';
 
 const Color darkerPurple = Color.fromARGB(255, 85, 105, 220);
 const Color bgPurple = Color.fromARGB(255, 144, 157, 255);
+const double gameCardHeight = 110;
 
 const List<String> fullDeck = [
   'ace-of-spades',
@@ -382,6 +383,17 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
     return Rect.fromPoints(topLeft, bottomRight);
   }
 
+  Rect _cardRectWithin(Rect bounds) {
+    final cardHeight = bounds.height;
+    final cardWidth = cardHeight * playingCardAspectRatio;
+
+    return Rect.fromCenter(
+      center: bounds.center,
+      width: cardWidth,
+      height: cardHeight,
+    );
+  }
+
   Future<void> _animateCardToPile({
     required int pileIndex,
     required CardModel card,
@@ -396,13 +408,16 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
       return;
     }
 
-    final startRect = _rectForKey(_deckCardKey, overlayRenderObject);
-    final endRect = _rectForKey(_pileKeys[pileIndex], overlayRenderObject);
+    final startBounds = _rectForKey(_deckCardKey, overlayRenderObject);
+    final endBounds = _rectForKey(_pileKeys[pileIndex], overlayRenderObject);
 
-    if (startRect == null || endRect == null) {
+    if (startBounds == null || endBounds == null) {
       onArrive();
       return;
     }
+
+    final startRect = _cardRectWithin(startBounds);
+    final endRect = _cardRectWithin(endBounds);
 
     final flightController = AnimationController(
       vsync: this,
@@ -443,9 +458,12 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
               width: size.width,
               height: size.height,
               child: IgnorePointer(
-                child: Transform.rotate(
-                  angle: 0.05 * math.sin(math.pi * progress),
-                  child: CardArtwork(cardName: card.name),
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: Transform.rotate(
+                    angle: 0.05 * math.sin(math.pi * progress),
+                    child: CardArtwork(cardName: card.name),
+                  ),
                 ),
               ),
             );
@@ -747,7 +765,6 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
         _wrongPileIndex == index ? _feedbackController.value : 0.0;
     final shakeOffset =
         math.sin(feedbackProgress * math.pi * 8) * (1 - feedbackProgress) * 10;
-    final feedbackScale = 1 - (feedbackProgress * 0.14);
     final feedbackOpacity = 1 - feedbackProgress;
     final isSelected = tappedIndex == index;
     final isLanding = _landingPileIndices.contains(index);
@@ -758,35 +775,32 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
       width: cardSize,
       child: Transform.translate(
         offset: Offset(shakeOffset, 0),
-        child: Transform.scale(
-          scale: feedbackScale,
-          child: Opacity(
-            opacity: feedbackOpacity,
-            child: TweenAnimationBuilder<double>(
-              key: ValueKey('${card.name}-$isLanding'),
-              tween: Tween<double>(
-                begin: isLanding ? 0.88 : 1,
-                end: 1,
-              ),
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOutBack,
-              builder: (context, scale, child) {
-                return Transform.scale(
-                  scale: scale,
-                  child: child,
-                );
+        child: Opacity(
+          opacity: feedbackOpacity,
+          child: TweenAnimationBuilder<double>(
+            key: ValueKey('${card.name}-$isLanding'),
+            tween: Tween<double>(
+              begin: isLanding ? 0.88 : 1,
+              end: 1,
+            ),
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutBack,
+            builder: (context, scale, child) {
+              return Transform.scale(
+                scale: scale,
+                child: child,
+              );
+            },
+            child: PlayingCard(
+              cardName: card.name,
+              isSelected: isSelected,
+              isDimmed: tappedIndex == null || isSelected,
+              onTap: () {
+                if (gameStatus == GameStatus.playing &&
+                    card.name != 'playing-card') {
+                  _handleCardTap(index);
+                }
               },
-              child: PlayingCard(
-                cardName: card.name,
-                isSelected: isSelected,
-                isDimmed: tappedIndex == null || isSelected,
-                onTap: () {
-                  if (gameStatus == GameStatus.playing &&
-                      card.name != 'playing-card') {
-                    _handleCardTap(index);
-                  }
-                },
-              ),
             ),
           ),
         ),
@@ -827,12 +841,12 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
     return Stack(
       alignment: const Alignment(0, -1),
       children: [
-        const CardDeckArtwork(height: 125),
+        const CardDeckArtwork(height: gameCardHeight / 0.9),
         if (nextCard != null)
           SizedBox(
             key: _deckCardKey,
-            height: 110,
-            width: 110,
+            height: gameCardHeight,
+            width: gameCardHeight,
             child: Opacity(
               opacity: deckCardOpacity,
               child: _DeckCardWidget(
@@ -843,8 +857,8 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
           )
         else
           const SizedBox(
-            height: 110,
-            width: 110,
+            height: gameCardHeight,
+            width: gameCardHeight,
           ),
       ],
     );
@@ -949,7 +963,7 @@ class _CardGameState extends State<CardGame> with TickerProviderStateMixin {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    _buildCardGrid(110),
+                    _buildCardGrid(gameCardHeight),
                     const SizedBox(height: 20),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -1132,14 +1146,17 @@ class _DeckCardWidgetState extends State<_DeckCardWidget>
 
         final face = CardArtwork(
           cardName: widget.card?.name ?? 'playing-card',
-          height: 110,
+          height: gameCardHeight,
         );
 
         return Transform(
           transform: transform,
           alignment: Alignment.center,
           child: showBack
-              ? const CardArtwork(cardName: 'playing-card', height: 110)
+              ? const CardArtwork(
+                  cardName: 'playing-card',
+                  height: gameCardHeight,
+                )
               : Transform(
                   transform: Matrix4.identity()..rotateY(math.pi),
                   alignment: Alignment.center,
