@@ -63,15 +63,15 @@ class _FlipCardWidgetState extends State<FlipCardWidget>
   }
 
   Future flipCard() async {
-  if (controller.isAnimating) return;
+    if (controller.isAnimating) return;
 
-  await controller.forward();
-  await Future.delayed(const Duration(milliseconds: 200));
-  await controller.reverse();
-  setState(() {
-    isFront = false;
-  });
-}
+    await controller.forward();
+    await Future.delayed(const Duration(milliseconds: 200));
+    await controller.reverse();
+    setState(() {
+      isFront = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
